@@ -1,40 +1,28 @@
+# Sharenear
 
----
+**Sharenear** is a real-time, privacy-focused file sharing platform that enables users to securely transfer large files (up to 10GB) between devices using QR codes or 6-digit codes. It supports both 1-to-1 (WebRTC) and 1-to-many (Socket.IO) connections with fallback support.
 
-## 📤 3. **ShareNear – File Sharing Between Devices (10GB+)**
+## 🌐 Tech Stack
 
-```markdown
-# ShareNear 📤
+- **Frontend**: React + Vite + UnoCSS
+- **Backend**: Node.js + Express + Socket.IO
+- **Storage (Optional)**: Firebase / MongoDB / S3
+- **Features**: WebRTC, Socket.IO fallback, Chunked Upload, Realtime delivery
 
-Share files instantly between mobile and desktop using QR codes or 6-digit room codes. Designed for speed, privacy, and simplicity — all in your browser.
+## 🚀 Features
 
-## 🛠 Tech Stack
+- 🔐 Client-side encryption
+- 📱 Multi-device support (Mobile/Desktop browsers)
+- 📤 Drag and drop multiple files/folders
+- 📡 QR Code & 6-digit code based sharing
+- 📦 Chunked uploads with resumability
+- 👥 Realtime user presence and chat
+- ⏳ Auto-expiry and self-destruct options
 
-- React + UnoCSS (frontend)
-- Node.js + Express + Socket.IO (backend)
-- WebRTC (P2P transfers)
-- Chunked Uploading (streams)
-- Optional: MongoDB / S3 for storage
-
-## 🌟 Features
-
-- 🚀 Real-time file sharing
-- 📦 Multi-format & multi-file support
-- 🔒 Password-protected sessions
-- 🌐 No app required – browser-based
-- 🔁 Chunked resumable uploads
-- ⚡ Speed, progress, and ETA tracking
-
-## 🚀 Getting Started
+## 📦 Installation
 
 ```bash
-# Frontend
-cd sharenear-client
+git clone https://github.com/your-username/Sharenear.git
+cd Sharenear
 npm install
 npm run dev
-
-# Backend
-cd sharenear-server
-npm install
-node server.js
-
