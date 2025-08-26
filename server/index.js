@@ -4,11 +4,35 @@ const { Server } = require("socket.io");
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// CORS configuration for production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.CLIENT_URL, /\.vercel\.app$/, /\.railway\.app$/]
+    : "*",
+  methods: ["GET", "POST"],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Basic info endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'ShareNear Server', 
+    version: '1.0.0',
+    status: 'running'
+  });
+});
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+  cors: corsOptions,
   maxHttpBufferSize: 1e8
 });
 
