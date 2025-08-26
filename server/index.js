@@ -8,7 +8,7 @@ const app = express();
 // CORS configuration for production
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.CLIENT_URL, /\.vercel\.app$/, /\.railway\.app$/]
+    ? [process.env.CLIENT_URL, /\.vercel\.app$/, /\.railway\.app$/, /\.onrender\.com$/]
     : "*",
   methods: ["GET", "POST"],
   credentials: true

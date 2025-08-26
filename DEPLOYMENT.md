@@ -1,5 +1,41 @@
 # Deployment Guide
 
+## Render Deployment (Recommended)
+
+### Option 1: Using render.yaml (Automatic)
+
+1. **Create Render Account**: Go to [render.com](https://render.com) and sign up
+2. **Connect Repository**: 
+   - Click "New" → "Blueprint"
+   - Connect your GitHub repository
+   - Render will automatically detect the `render.yaml` file and create both services
+3. **Environment Variables**: 
+   - The backend service will be automatically configured
+   - The frontend will automatically use the backend URL
+4. **Deploy**: Both services will deploy automatically
+
+### Option 2: Manual Service Creation
+
+#### Backend Service
+1. **Create Web Service**:
+   - Click "New" → "Web Service"
+   - Connect your repository
+   - Name: `sharenear-backend`
+   - Environment: `Node`
+   - Build Command: `cd server && npm install`
+   - Start Command: `cd server && npm start`
+   - Plan: Free
+
+#### Frontend Service
+1. **Create Static Site**:
+   - Click "New" → "Static Site"
+   - Connect your repository
+   - Name: `sharenear-frontend`
+   - Build Command: `npm run install-client && npm run build`
+   - Publish Directory: `client/build`
+   - Add Environment Variable:
+     - `REACT_APP_SERVER_URL`: Your backend service URL (e.g., `https://sharenear-backend.onrender.com`)
+
 ## Backend Deployment on Railway
 
 1. **Create Railway Account**: Go to [railway.app](https://railway.app) and sign up
