@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 * {
   box-sizing: border-box;
 }
@@ -375,6 +379,14 @@ body.dark-theme {
   color: #e1e1e1;
 }
 
+/* Room Grid Layout */
+.room-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  margin-top: 20px;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .App {
@@ -390,6 +402,11 @@ body.dark-theme {
     flex-direction: column;
     gap: 15px;
     text-align: center;
+  }
+  
+  .room-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
   }
   
   .chat-input-container {
@@ -412,6 +429,11 @@ body.dark-theme {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .room-container,

@@ -24,7 +24,7 @@ PORT=3001 (optional - Railway auto-assigns)
    - Select this repository
 3. **Configure Build Settings**:
    - Framework Preset: Create React App
-   - Root Directory: `client`
+   - Root Directory: `.` (current directory)
    - Build Command: `npm run build`
    - Output Directory: `build`
 4. **Configure Environment Variables**:
