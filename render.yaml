@@ -8,15 +8,12 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-    
-  # Frontend service  
-  - type: static
-    name: sharenear-frontend
-    buildCommand: npm run install-client && npm run build
-    staticPublishPath: ./client/build
-    envVars:
-      - key: REACT_APP_SERVER_URL
-        fromService:
-          type: web
-          name: sharenear-backend
-          property: host
+
+databases: []
+
+# Note: Static sites must be created manually in Render
+# The blueprint format doesn't support static sites
+# Please create the frontend manually as a Static Site with:
+# - Build Command: npm run install-client && npm run build  
+# - Publish Directory: client/build
+# - Environment Variable: REACT_APP_SERVER_URL = https://sharenear-backend.onrender.com
