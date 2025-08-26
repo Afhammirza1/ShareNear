@@ -3,7 +3,6 @@ services:
   - type: web
     name: sharenear-backend
     env: node
-    plan: free
     buildCommand: cd server && npm install
     startCommand: cd server && npm start
     envVars:
@@ -11,10 +10,8 @@ services:
         value: production
     
   # Frontend service  
-  - type: web
+  - type: static
     name: sharenear-frontend
-    env: static
-    plan: free
     buildCommand: npm run install-client && npm run build
     staticPublishPath: ./client/build
     envVars:
