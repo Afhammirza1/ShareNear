@@ -24,8 +24,9 @@
 2. Connect your GitHub repository
 3. Configure the service:
    - **Name**: `sharenear-frontend`
-   - **Build Command**: `npm run build:render`
-   - **Publish Directory**: `client/build`
+   - **Root Directory**: `client`
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `build`
    - **Auto-Deploy**: Yes (recommended)
 
 4. Add Environment Variables:
