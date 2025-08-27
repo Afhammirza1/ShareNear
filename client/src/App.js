@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { QRCodeSVG } from 'qrcode.react';
 import Room from './components/Room';
 import ThemeToggle from './components/ThemeToggle';
 
@@ -28,6 +29,16 @@ function App() {
 
     setSocket(newSocket);
 
+    // Check for QR code parameters in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomParam = urlParams.get('room');
+    const passwordParam = urlParams.get('password');
+    
+    if (roomParam && passwordParam) {
+      setJoinRoomId(roomParam);
+      setJoinPassword(passwordParam);
+    }
+
     return () => {
       newSocket.close();
     };
@@ -49,12 +60,21 @@ function App() {
           setCurrentRoom({ roomId: joinRoomId.toUpperCase(), password: joinPassword });
           setRoomId(joinRoomId.toUpperCase());
           setPassword(joinPassword);
+          // Clear URL parameters after successful join
+          window.history.replaceState({}, document.title, window.location.pathname);
         } else {
           alert(response.message);
         }
       });
     }
   };
+
+  // Auto-join when QR code parameters are available
+  useEffect(() => {
+    if (socket && isConnected && joinRoomId && joinPassword && !currentRoom) {
+      joinRoom();
+    }
+  }, [socket, isConnected, joinRoomId, joinPassword, currentRoom]);
 
   const leaveRoom = () => {
     setCurrentRoom(null);
@@ -143,7 +163,80 @@ function App() {
           <div className="room-header">
             <div className="room-info">
               <h2>Room: {currentRoom.roomId}</h2>
-              <p>Share this room ID with others to let them join</p>
+              <p>Share this room ID and password with others to let them join</p>
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginTop: '15px' }}>
+                <div>
+                  <p><strong>Room ID:</strong> {currentRoom.roomId} 
+                    <button 
+                      onClick={() => navigator.clipboard.writeText(currentRoom.roomId)}
+                      style={{ 
+                        marginLeft: '8px', 
+                        padding: '2px 6px', 
+                        fontSize: '12px',
+                        background: '#3498db',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </p>
+                  <p><strong>Password:</strong> {currentRoom.password}
+                    <button 
+                      onClick={() => navigator.clipboard.writeText(currentRoom.password)}
+                      style={{ 
+                        marginLeft: '8px', 
+                        padding: '2px 6px', 
+                        fontSize: '12px',
+                        background: '#3498db',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '3px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </p>
+                  <button 
+                    onClick={() => navigator.clipboard.writeText(`${window.location.origin}?room=${currentRoom.roomId}&password=${encodeURIComponent(currentRoom.password)}`)}
+                    style={{ 
+                      padding: '6px 12px', 
+                      fontSize: '14px',
+                      background: '#27ae60',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      marginTop: '8px'
+                    }}
+                  >
+                    📋 Copy Join Link
+                  </button>
+                </div>
+                <div style={{ 
+                  padding: '10px', 
+                  backgroundColor: 'white', 
+                  borderRadius: '8px',
+                  border: '1px solid #ddd'
+                }}>
+                  <QRCodeSVG 
+                    value={`${window.location.origin}?room=${currentRoom.roomId}&password=${encodeURIComponent(currentRoom.password)}`}
+                    size={120}
+                    level="M"
+                  />
+                  <p style={{ 
+                    textAlign: 'center', 
+                    fontSize: '12px', 
+                    margin: '5px 0 0 0',
+                    color: '#666'
+                  }}>
+                    Scan to join
+                  </p>
+                </div>
+              </div>
             </div>
             <button
               onClick={leaveRoom}
