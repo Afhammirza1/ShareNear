@@ -21,8 +21,10 @@ const ShareRoom = () => {
   const [receivedFiles, setReceivedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
 
-  const peerConnection = useRef(null);
-  const dataChannel = useRef(null);
+  // Maps to store connections per user
+  const peerConnections = useRef(new Map());
+  const dataChannels = useRef(new Map());
+  const fileTransferStates = useRef(new Map()); // Map<userId, { buffer: [], info: null, receivedSize: 0 }>
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -34,37 +36,44 @@ const ShareRoom = () => {
         navigate('/');
       } else {
         setUsers(response.users);
-        setStatus('Waiting for peer...');
+        setStatus('Waiting for peers...');
+        // Connect to existing users
+        response.users.forEach(userId => {
+             if (userId !== socket.id) {
+                 createOffer(userId);
+             }
+        });
       }
     });
 
     socket.on('user-joined', ({ userId }) => {
       setUsers((prev) => [...prev, userId]);
-      setStatus('Peer connected! Initializing connection...');
-      createOffer(userId);
+      setStatus('New peer connected!');
     });
 
     socket.on('user-left', ({ userId }) => {
       setUsers((prev) => prev.filter((id) => id !== userId));
-      setStatus('Peer disconnected. Waiting...');
-      cleanupConnection();
+      cleanupConnection(userId);
     });
 
     socket.on('signal', async ({ from, signal }) => {
-      if (!peerConnection.current) {
+      // If we don't have a PC for this user yet, create one (this happens for the receiver of the offer)
+      if (!peerConnections.current.has(from)) {
         createPeerConnection(from);
       }
       
+      const pc = peerConnections.current.get(from);
+
       try {
         if (signal.type === 'offer') {
-          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
-          const answer = await peerConnection.current.createAnswer();
-          await peerConnection.current.setLocalDescription(answer);
+          await pc.setRemoteDescription(new RTCSessionDescription(signal));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
           socket.emit('signal', { to: from, signal: answer });
         } else if (signal.type === 'answer') {
-          await peerConnection.current.setRemoteDescription(new RTCSessionDescription(signal));
+          await pc.setRemoteDescription(new RTCSessionDescription(signal));
         } else if (signal.candidate) {
-          await peerConnection.current.addIceCandidate(new RTCIceCandidate(signal));
+          await pc.addIceCandidate(new RTCIceCandidate(signal));
         }
       } catch (error) {
         console.error('Error handling signal:', error);
@@ -75,96 +84,126 @@ const ShareRoom = () => {
       socket.off('user-joined');
       socket.off('user-left');
       socket.off('signal');
-      cleanupConnection();
+      // Cleanup all connections
+      peerConnections.current.forEach((pc) => pc.close());
+      peerConnections.current.clear();
+      dataChannels.current.forEach((dc) => dc.close());
+      dataChannels.current.clear();
     };
   }, [socket, roomId, navigate]);
 
   const createPeerConnection = (targetUserId) => {
-    peerConnection.current = new RTCPeerConnection(iceServers);
+    // If already exists, return it (shouldn't happen often but good safety)
+    if (peerConnections.current.has(targetUserId)) {
+        return peerConnections.current.get(targetUserId);
+    }
 
-    peerConnection.current.onicecandidate = (event) => {
+    const pc = new RTCPeerConnection(iceServers);
+    peerConnections.current.set(targetUserId, pc);
+
+    pc.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit('signal', { to: targetUserId, signal: event.candidate });
       }
     };
 
-    peerConnection.current.ondatachannel = (event) => {
-      setupDataChannel(event.channel);
+    pc.ondatachannel = (event) => {
+      setupDataChannel(event.channel, targetUserId);
     };
 
-    peerConnection.current.onconnectionstatechange = () => {
-      if (peerConnection.current.connectionState === 'connected') {
-        setStatus('Connected via WebRTC! Ready to share.');
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setStatus(`Connected to ${targetUserId.substr(0, 4)}...`);
       }
     };
+    
+    return pc;
   };
 
   const createOffer = async (targetUserId) => {
-    createPeerConnection(targetUserId);
-    dataChannel.current = peerConnection.current.createDataChannel('file-transfer');
-    setupDataChannel(dataChannel.current);
+    const pc = createPeerConnection(targetUserId);
+    const dc = pc.createDataChannel('file-transfer');
+    setupDataChannel(dc, targetUserId);
 
-    const offer = await peerConnection.current.createOffer();
-    await peerConnection.current.setLocalDescription(offer);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
     socket.emit('signal', { to: targetUserId, signal: offer });
   };
 
-  const setupDataChannel = (channel) => {
-    channel.onopen = () => {
-      console.log('Data channel open');
-    };
+  const setupDataChannel = (channel, targetUserId) => {
+    dataChannels.current.set(targetUserId, channel);
+    
+    // Initialize transfer state for this user
+    fileTransferStates.current.set(targetUserId, {
+        buffer: [],
+        info: null,
+        receivedSize: 0
+    });
 
-    let receivedBuffer = [];
-    let receivedSize = 0;
-    let currentFileInfo = null;
+    channel.onopen = () => {
+      console.log(`Data channel open with ${targetUserId}`);
+    };
 
     channel.onmessage = (event) => {
       const data = event.data;
+      const state = fileTransferStates.current.get(targetUserId);
+      
+      if (!state) return;
 
       if (typeof data === 'string') {
         const message = JSON.parse(data);
         if (message.type === 'file-start') {
-          currentFileInfo = message;
-          receivedBuffer = [];
-          receivedSize = 0;
-          setTransferProgress(0);
+          state.info = message;
+          state.buffer = [];
+          state.receivedSize = 0;
+          setTransferProgress(0); // Note: This might jump around if multiple people send files at once.
         } else if (message.type === 'file-end') {
-          const blob = new Blob(receivedBuffer);
+          if (!state.info) return; // Guard against missing file-start or duplicate file-end
+          const blob = new Blob(state.buffer);
           const url = URL.createObjectURL(blob);
-          setReceivedFiles((prev) => [...prev, { name: currentFileInfo.name, url, size: currentFileInfo.size }]);
+          const { name, size } = state.info; // Capture values before state mutation
+          
+          setReceivedFiles((prev) => [...prev, { name, url, size, from: targetUserId }]);
           setTransferProgress(100);
           
           // Save metadata to Firestore
           if (currentUser) {
             addDoc(collection(db, 'transfers'), {
               userId: currentUser.uid,
-              fileName: currentFileInfo.name,
-              fileSize: currentFileInfo.size,
+              fileName: name,
+              fileSize: size,
               type: 'received',
+              from: targetUserId,
               timestamp: serverTimestamp()
             }).catch(err => console.error("Error saving metadata:", err));
           }
 
-          currentFileInfo = null;
+          state.info = null;
+          state.buffer = [];
         }
       } else {
-        receivedBuffer.push(data);
-        receivedSize += data.byteLength;
-        if (currentFileInfo) {
-          setTransferProgress(Math.round((receivedSize / currentFileInfo.size) * 100));
+        state.buffer.push(data);
+        state.receivedSize += data.byteLength;
+        if (state.info) {
+          // Only update progress if it's the "active" one we care about? 
+          // For now, just update it. It might flicker if 2 files come in.
+          setTransferProgress(Math.round((state.receivedSize / state.info.size) * 100));
         }
       }
     };
   };
 
-  const cleanupConnection = () => {
-    if (peerConnection.current) {
-      peerConnection.current.close();
-      peerConnection.current = null;
+  const cleanupConnection = (userId) => {
+    if (peerConnections.current.has(userId)) {
+      peerConnections.current.get(userId).close();
+      peerConnections.current.delete(userId);
     }
-    if (dataChannel.current) {
-      dataChannel.current.close();
-      dataChannel.current = null;
+    if (dataChannels.current.has(userId)) {
+      dataChannels.current.get(userId).close();
+      dataChannels.current.delete(userId);
+    }
+    if (fileTransferStates.current.has(userId)) {
+        fileTransferStates.current.delete(userId);
     }
   };
 
@@ -193,26 +232,37 @@ const ShareRoom = () => {
   };
 
   const sendFile = async () => {
-    if (!file || !dataChannel.current || dataChannel.current.readyState !== 'open') return;
+    if (!file) return;
+    
+    const channels = Array.from(dataChannels.current.values()).filter(dc => dc.readyState === 'open');
+    if (channels.length === 0) {
+        alert("No peers connected!");
+        return;
+    }
 
-    dataChannel.current.send(JSON.stringify({
+    // Send start message to all
+    const startMsg = JSON.stringify({
       type: 'file-start',
       name: file.name,
       size: file.size
-    }));
+    });
+    channels.forEach(dc => dc.send(startMsg));
 
     const fileReader = new FileReader();
     let offset = 0;
 
     fileReader.onload = (e) => {
-      dataChannel.current.send(e.target.result);
-      offset += e.target.result.byteLength;
+      const chunk = e.target.result;
+      channels.forEach(dc => dc.send(chunk));
+      
+      offset += chunk.byteLength;
       setTransferProgress(Math.round((offset / file.size) * 100));
 
       if (offset < file.size) {
         readSlice(offset);
       } else {
-        dataChannel.current.send(JSON.stringify({ type: 'file-end' }));
+        const endMsg = JSON.stringify({ type: 'file-end' });
+        channels.forEach(dc => dc.send(endMsg));
         
         // Save metadata to Firestore
         if (currentUser) {
@@ -221,6 +271,7 @@ const ShareRoom = () => {
             fileName: file.name,
             fileSize: file.size,
             type: 'sent',
+            recipientCount: channels.length,
             timestamp: serverTimestamp()
           }).catch(err => console.error("Error saving metadata:", err));
         }
@@ -298,15 +349,15 @@ const ShareRoom = () => {
         <button 
           className="btn btn-primary" 
           onClick={sendFile} 
-          disabled={!file || status !== 'Connected via WebRTC! Ready to share.'} 
+          disabled={!file || users.length < 2} 
           style={{ 
             marginTop: '2rem', 
             width: '100%',
-            opacity: (!file || status !== 'Connected via WebRTC! Ready to share.') ? 0.5 : 1,
-            cursor: (!file || status !== 'Connected via WebRTC! Ready to share.') ? 'not-allowed' : 'pointer'
+            opacity: (!file || users.length < 2) ? 0.5 : 1,
+            cursor: (!file || users.length < 2) ? 'not-allowed' : 'pointer'
           }}
         >
-          Send File
+          Send to All
         </button>
 
         {transferProgress > 0 && (

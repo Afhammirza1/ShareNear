@@ -35,7 +35,7 @@ const joinRoom = (code, socketId) => {
     return { success: true };
   }
 
-  if (room.users.length >= 2) {
+  if (room.users.length >= 5) {
     return { error: 'Room is full' };
   }
 
